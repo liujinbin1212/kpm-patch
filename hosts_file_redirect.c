@@ -21,6 +21,12 @@
 #include <common.h>
 #include <hook.h>
 
+/* lzghzr's hook.h defines this sentinel; ShirkNeko fork does not.
+ * It is only used as a module-local "not hooked" marker. */
+#ifndef HOOK_NOT_HOOK
+#define HOOK_NOT_HOOK 4089
+#endif
+
 #include "kpm_hook_utils.h"
 
 KPM_NAME("hosts_file_redirect");
