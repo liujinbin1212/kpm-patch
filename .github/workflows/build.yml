@@ -1,0 +1,57 @@
+name: Build KPM
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'hello.c'
+      - 'Makefile'
+      - 'hello.lds'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
+  create:
+    tags:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Clone KernelPatch source (SukiSU fork)
+        run: git clone --depth=1 https://github.com/ShirkNeko/SukiSU_KernelPatch_patch KernelPatch
+
+      - name: Setup Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+          add-to-path: false
+
+      - name: Build KPM
+        env:
+          NDK_PATH: ${{ steps.ndk.outputs.ndk-root }}
+          KP_DIR: ${{ github.workspace }}/KernelPatch
+        run: |
+          make clean || true
+          make V=1
+
+      - name: Show output
+        run: ls -la hello.kpm && file hello.kpm
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kpm-base
+          path: hello.kpm
+          if-no-files-found: error
+
+      - name: Release on tag
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: hello.kpm
