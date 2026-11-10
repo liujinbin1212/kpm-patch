@@ -6,10 +6,10 @@
  *  1. File hiding      : openat/faccessat/faccessat2/fstatat/statx/readlinkat
  *                        return -ENOENT for hidden paths (root artifacts etc.)
  *  2. Directory hiding : getdents64 entries filtered
- *  3. Debugger traces  : /proc/*/status TracerPid -> 0,
+ *  3. Debugger traces  : /proc/[pid]/status TracerPid -> 0,
  *                        "t (tracing stop)" -> "S (sleeping)", wchan, stat
- *  4. Mountinfo hiding : root-related mount lines dropped from /proc/*/mountinfo
- *  5. Maps hiding      : injected libs (zygisk/lsposed/frida) hidden in /proc/*/maps
+ *  4. Mountinfo hiding : root-related mount lines dropped from /proc/[pid]/mountinfo
+ *  5. Maps hiding      : injected libs (zygisk/lsposed/frida) hidden in /proc/[pid]/maps
  *  6. Dynamic config   : CTL0 interface (add/del/list/clear/status)
  *
  * Credits: bmax121/KernelPatch, Beransnow, cxapython/mkpms (anti-detect),
@@ -330,7 +330,7 @@ static int range_has_marker(const char *buf, size_t from, size_t to, const char 
 }
 
 /* ------------------------------------------------------------------ */
-/* 4: /proc/*/mountinfo line filtering                                 */
+/* 4: /proc/[pid]/mountinfo line filtering                                 */
 /* ------------------------------------------------------------------ */
 
 static void before_show_mountinfo(hook_fargs2_t *args, void *udata)
@@ -371,7 +371,7 @@ static void after_show_mountinfo(hook_fargs2_t *args, void *udata)
 }
 
 /* ------------------------------------------------------------------ */
-/* 5: /proc/*/maps entry filtering                                     */
+/* 5: /proc/[pid]/maps entry filtering                                     */
 /* ------------------------------------------------------------------ */
 
 static void before_show_map_vma(hook_fargs2_t *args, void *udata)
