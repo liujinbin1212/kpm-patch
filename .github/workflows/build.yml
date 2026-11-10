@@ -5,6 +5,9 @@ on:
     branches: [ main ]
     paths:
       - 'hello.c'
+      - 'kpm-hide.c'
+      - 'hosts_file_redirect.c'
+      - 'include/**'
       - 'Makefile'
       - 'hello.lds'
       - '.github/workflows/build.yml'
@@ -40,13 +43,13 @@ jobs:
           make V=1
 
       - name: Show output
-        run: ls -la hello.kpm && file hello.kpm
+        run: ls -la *.kpm
 
-      - name: Upload artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: kpm-base
-          path: hello.kpm
+          name: kpm-modules
+          path: "*.kpm"
           if-no-files-found: error
 
       - name: Release on tag
