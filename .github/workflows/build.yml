@@ -26,15 +26,14 @@ jobs:
         run: git clone --depth=1 https://github.com/ShirkNeko/SukiSU_KernelPatch_patch KernelPatch
 
       - name: Setup Android NDK
-        id: ndk
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r27c
-          add-to-path: false
+        run: |
+          curl -sSL -o ndk.zip https://dl.google.com/android/repository/android-ndk-r27c-linux.zip
+          unzip -q ndk.zip -d "$HOME"
+          echo "NDK_PATH=$HOME/android-ndk-r27c" >> "$GITHUB_ENV"
+          "$HOME/android-ndk-r27c/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar" --version | head -1
 
       - name: Build KPM
         env:
-          NDK_PATH: ${{ steps.ndk.outputs.ndk-root }}
           KP_DIR: ${{ github.workspace }}/KernelPatch
         run: |
           make clean || true
