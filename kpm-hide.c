@@ -457,6 +457,34 @@ static void wrap_uninstall_all(void)
 /* 6: CTL0 dynamic configuration                                       */
 /* ------------------------------------------------------------------ */
 
+static char *append_str(char *p, const char *s)
+{
+    while (*s)
+        *p++ = *s++;
+    return p;
+}
+
+static char *append_dec(char *p, int v)
+{
+    char tmp[12];
+    int n = 0;
+    if (v == 0) {
+        *p++ = '0';
+        return p;
+    }
+    if (v < 0) {
+        *p++ = '-';
+        v = -v;
+    }
+    while (v) {
+        tmp[n++] = (char)('0' + v % 10);
+        v /= 10;
+    }
+    while (n)
+        *p++ = tmp[--n];
+    return p;
+}
+
 static long write_msg(char *__user out_msg, int outlen, const char *msg)
 {
     int len = strlen(msg);
@@ -528,34 +556,6 @@ static long hide_ctl0(const char *args, char *__user out_msg, int outlen)
         buf[off] = '\0';
         return write_msg(out_msg, outlen, buf);
     }
-
-static char *append_str(char *p, const char *s)
-{
-    while (*s)
-        *p++ = *s++;
-    return p;
-}
-
-static char *append_dec(char *p, int v)
-{
-    char tmp[12];
-    int n = 0;
-    if (v == 0) {
-        *p++ = '0';
-        return p;
-    }
-    if (v < 0) {
-        *p++ = '-';
-        v = -v;
-    }
-    while (v) {
-        tmp[n++] = (char)('0' + v % 10);
-        v /= 10;
-    }
-    while (n)
-        *p++ = tmp[--n];
-    return p;
-}
 
     if (strcmp(args, "status") == 0) {
         char buf[256];
