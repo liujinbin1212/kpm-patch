@@ -30,10 +30,10 @@
 #include <asm/current.h>
 
 KPM_NAME("kpm-hide");
-KPM_VERSION("1.0.0");
+KPM_VERSION("1.1.0");
 KPM_LICENSE("GPL v2");
 KPM_AUTHOR("liujinbin1212");
-KPM_DESCRIPTION("Kernel-level file/process/mountinfo/maps hiding for apps");
+KPM_DESCRIPTION("Kernel-level file/process/mountinfo/maps hiding for apps (kernel version guarded)");
 
 #define AID_APP_START 10000
 #define NAME_BUF 256
@@ -70,6 +70,86 @@ static int resolve_symbols(void)
         return -1;
     }
     return 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* kernel version guard                                                */
+/*                                                                     */
+/* KPM is built against a specific kernel ABI. If the device kernel is */
+/* upgraded (OTA / new KMI), inline hooks may target changed functions  */
+/* and crash the kernel. Loading the module only happens at boot when   */
+/* the file sits in /data/adb/kpm, so a crash there means a bootloop.   */
+/* This guard refuses to load on a major.minor mismatch instead.        */
+/* Override at load time with args "force".                            */
+/* ------------------------------------------------------------------ */
+
+#ifndef EXPECT_KVER_MAJOR
+#define EXPECT_KVER_MAJOR 6
+#endif
+#ifndef EXPECT_KVER_MINOR
+#define EXPECT_KVER_MINOR 6
+#endif
+
+#define KVER_BUF 128
+
+static char kver_str[KVER_BUF];
+static int kver_major = -1;
+static int kver_minor = -1;
+
+static void kver_fetch(void)
+{
+    const char *banner = (const char *)kallsyms_lookup_name("linux_banner");
+    const char *p;
+    int i = 0;
+
+    kver_str[0] = '\0';
+    kver_major = -1;
+    kver_minor = -1;
+    if (!banner)
+        return;
+
+    p = banner;
+    /* banner looks like: "Linux version 6.6.118-android15-8-... (builder@host)" */
+    if (p[0] == 'L' && p[1] == 'i' && p[2] == 'n') {
+        while (*p && *p != ' ')
+            p++;
+        while (*p == ' ')
+            p++;
+        if (p[0] == 'v' && p[1] == 'e') {
+            while (*p && *p != ' ')
+                p++;
+            while (*p == ' ')
+                p++;
+        }
+    }
+
+    while (p[i] && i < KVER_BUF - 1) {
+        char c = p[i];
+        if (c == '\n' || c == ' ' || c == '(')
+            break;
+        kver_str[i] = c;
+        i++;
+    }
+    kver_str[i] = '\0';
+
+    {
+        const char *q = kver_str;
+        int maj = 0, min = 0, any = 0;
+        while (*q >= '0' && *q <= '9') {
+            maj = maj * 10 + (*q - '0');
+            q++;
+            any = 1;
+        }
+        if (any && *q == '.') {
+            q++;
+            while (*q >= '0' && *q <= '9') {
+                min = min * 10 + (*q - '0');
+                q++;
+            }
+            kver_major = maj;
+            kver_minor = min;
+        }
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -580,7 +660,26 @@ static long hide_ctl0(const char *args, char *__user out_msg, int outlen)
         return write_msg(out_msg, outlen, buf);
     }
 
-    return write_msg(out_msg, outlen, "usage: add <str> | del <str> | list | clear | status");
+    if (strcmp(args, "kver") == 0) {
+        char buf[192];
+        char *p = buf;
+        p = append_str(p, "kernel: ");
+        p = append_str(p, kver_str[0] ? kver_str : "unknown");
+        p = append_str(p, " | expect: ");
+        p = append_dec(p, EXPECT_KVER_MAJOR);
+        *p++ = '.';
+        p = append_dec(p, EXPECT_KVER_MINOR);
+        if (kver_major < 0)
+            p = append_str(p, " | guard: skipped");
+        else if (kver_major == EXPECT_KVER_MAJOR && kver_minor == EXPECT_KVER_MINOR)
+            p = append_str(p, " | guard: pass");
+        else
+            p = append_str(p, " | guard: refuse (use args force)");
+        *p = '\0';
+        return write_msg(out_msg, outlen, buf);
+    }
+
+    return write_msg(out_msg, outlen, "usage: add <str> | del <str> | list | clear | status | kver");
 }
 
 /* ------------------------------------------------------------------ */
@@ -594,6 +693,23 @@ static long hide_init(const char *args, const char *event, void *__user reserved
 
     if (resolve_symbols())
         return -1;
+
+    /* version guard: refuse to load on a different major.minor kernel */
+    kver_fetch();
+    if (kver_major < 0) {
+        pr_info("kpm-hide: kernel version unknown, version guard skipped\n");
+    } else if (kver_major != EXPECT_KVER_MAJOR || kver_minor != EXPECT_KVER_MINOR) {
+        if (args && strstr(args, "force")) {
+            pr_info("kpm-hide: kernel %d.%d != expect %d.%d, guard bypassed by args\n",
+                    kver_major, kver_minor, EXPECT_KVER_MAJOR, EXPECT_KVER_MINOR);
+        } else {
+            pr_err("kpm-hide: kernel %d.%d != expect %d.%d, refuse to load (args \"force\" to override)\n",
+                   kver_major, kver_minor, EXPECT_KVER_MAJOR, EXPECT_KVER_MINOR);
+            return -1;
+        }
+    } else {
+        pr_info("kpm-hide: kernel %s matches, guard pass\n", kver_str);
+    }
 
     for (sc_installed = 0; sc_installed < (int)NUM_SC_HOOKS; sc_installed++) {
         const struct syscall_hook *h = &sc_hooks[sc_installed];
